@@ -2,3 +2,5 @@
 /.idea
 /wandb
 *.pyc
+*.pth
+*.log

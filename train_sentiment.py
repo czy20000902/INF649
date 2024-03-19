@@ -41,13 +41,15 @@ np.random.seed(47)
 # logger = logging.getLogger(__name__)
 logging.basicConfig(filename='training.log', level=logging.INFO)
 
+
+
 parser = argparse.ArgumentParser(description='Your description here')
 
 # Define arguments
-parser.add_argument('--task', type=int, default=3)
+parser.add_argument('--task', type=int, default=1)
 # root = 'E:/Dataset/memotion_dataset_7k/'
 parser.add_argument('--root', type=str, default='/users/eleves-a/2022/zhaoyang.chen/memotion_dataset_7k/')
-parser.add_argument('--save_path', type=str, default='checkpoints')
+parser.add_argument('--save_path', type=str, default='checkpoints_2')
 parser.add_argument('--batch_size', type=int, default=16)
 parser.add_argument('--img_size', nargs='+', type=int, default=[224, 224])
 parser.add_argument('--epochs', type=int, default=50)
@@ -69,7 +71,6 @@ parser.add_argument('--device', type=str, default="cuda" if torch.cuda.is_availa
 
 args = parser.parse_args()
 
-
 @torch.no_grad()
 def validate(
         model: nn.Module, dataloader: DataLoader
@@ -77,58 +78,41 @@ def validate(
     model.eval()
     dataset_size = 0
     running_loss = 0
-    losses = {}
 
-    criterion_humour = nn.CrossEntropyLoss()
-    criterion_sarcasm = nn.CrossEntropyLoss()
-    criterion_offensive = nn.CrossEntropyLoss()
-    criterion_motivational = nn.CrossEntropyLoss()
-    criterion_overall_sentiment = nn.CrossEntropyLoss()
-
-    accuracy_metric_humour = Accuracy(task="multiclass", num_classes=4)
-    accuracy_metric_sarcasm = Accuracy(task="multiclass", num_classes=4)
-    accuracy_metric_motivational = Accuracy(task="multiclass", num_classes=4)
-    accuracy_metric_offensive = Accuracy(task="multiclass", num_classes=2)
-    accuracy_metric_overall_sentiment = Accuracy(task="multiclass", num_classes=5)
+    criterion = nn.CrossEntropyLoss()
+    accuracy_metric = Accuracy(task="multiclass", num_classes=args.num_classes)
+    precision_metric = Precision(task="multiclass", num_classes=args.num_classes)
+    recall_metric = Recall(task="multiclass", num_classes=args.num_classes)
+    auroc_metric = AUROC(task="multiclass", num_classes=args.num_classes)
+    f1_metrics = F1Score(task="multiclass", num_classes=args.num_classes)
 
     val_scores = defaultdict(list)
 
     pbar = tqdm(enumerate(dataloader), total=len(dataloader), desc=f"(valid) ")
     for step, batch in pbar:
         batch = {k: v.to(args.device) for k, v in batch.items()}
-        label_humour = batch['label_humour']
-        label_sarcasm = batch['label_sarcasm']
-        label_offensive = batch['label_offensive']
-        label_motivational = batch['label_motivational']
-        label_overall_sentiment = batch['label_overall_sentiment']
+        labels = batch["label"]
         yHat = model.forward(**batch)
 
-        losses['loss_humour'] = criterion_humour(yHat[0], label_humour)
-        losses['loss_sarcasm'] = criterion_sarcasm(yHat[1], label_sarcasm)
-        losses['loss_motivational'] = criterion_motivational(yHat[2], label_offensive)
-        losses['loss_offensive'] = criterion_offensive(yHat[3], label_motivational)
-        losses['loss_overall_sentiment'] = criterion_overall_sentiment(yHat[4], label_overall_sentiment)
+        loss = criterion(yHat, labels)
 
-        loss = sum(l for l in losses.values())
-        running_loss += loss.item() * label_overall_sentiment.shape[0]
-        dataset_size += label_overall_sentiment.shape[0]
+        running_loss += loss.item() * labels.shape[0]
+        dataset_size += labels.shape[0]
 
         epoch_loss = running_loss / dataset_size
 
-        accuracy = 0
-        accuracy += accuracy_metric_humour(torch.argmax(yHat[0], axis=1).cpu(), label_humour.cpu())
-        
-        accuracy += accuracy_metric_sarcasm(torch.argmax(yHat[1], axis=1).cpu(), label_sarcasm.cpu())
-        
-        accuracy += accuracy_metric_motivational(torch.argmax(yHat[2], axis=1).cpu(), label_offensive.cpu())
-        
-        accuracy += accuracy_metric_offensive(torch.argmax(yHat[3], axis=1).cpu(), label_motivational.cpu())
-        
-        accuracy += accuracy_metric_overall_sentiment(torch.argmax(yHat[4], axis=1).cpu(), label_overall_sentiment.cpu())
-        
+        out = torch.argmax(yHat, axis=1)
+        accuracy = accuracy_metric(out.cpu(), labels.cpu())
+        precision = precision_metric(out.cpu(), labels.cpu())
+        recall = recall_metric(out.cpu(), labels.cpu())
+        auroc = auroc_metric(F.softmax(yHat, dim=1).cpu(), labels.cpu())
+        f1 = f1_metrics(out.cpu(), labels.cpu())
 
-
-        val_scores["accuracy"].append(accuracy / 5)
+        val_scores["accuracy"].append(accuracy)
+        val_scores["precision"].append(precision)
+        val_scores["recall"].append(recall)
+        val_scores["auroc"].append(auroc)
+        val_scores["f1"].append(f1)
 
         # wandb.log(
         #     {
@@ -176,7 +160,7 @@ if __name__ == "__main__":
     train_dataloader = DataLoader(dataset=train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_dataloader = DataLoader(dataset=valid_dataset, batch_size=args.batch_size, shuffle=False)
 
-    model = MemotionModel(task=args.task).to(args.device)
+    model = MemotionModel(task=args.task, numclasses=args.num_classes).to(args.device)
     # model = mobileone(num_classes=args.num_classes).to(args.device)
     optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-3)
     scheduler = MultiStepLR(optimizer, milestones=[30, 40], gamma=args.lr_gamma)
@@ -188,53 +172,42 @@ if __name__ == "__main__":
     if os.path.exists(checkpoint):
         model.load_state_dict(torch.load(checkpoint), strict=False)
 
+
     for epoch in range(args.epochs):
         print(f"\t\t\t\t########## EPOCH [{epoch + 1}/{args.epochs}] ##########")
 
         model.train()
         dataset_size = 0
         running_loss = 0
-        losses = {}
 
-        criterion_humour = nn.CrossEntropyLoss()
-        criterion_sarcasm = nn.CrossEntropyLoss()
-        criterion_offensive = nn.CrossEntropyLoss()
-        criterion_motivational = nn.CrossEntropyLoss()
-        criterion_overall_sentiment = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss()
+        accuracy_metric = Accuracy(task="multiclass", num_classes=args.num_classes)
+        precision_metric = Precision(task="multiclass", num_classes=args.num_classes)
+        recall_metric = Recall(task="multiclass", num_classes=args.num_classes)
+        auroc_metric = AUROC(task="multiclass", num_classes=args.num_classes)
+        f1_metrics = F1Score(task="multiclass", num_classes=args.num_classes)
 
         pbar = tqdm(enumerate(train_dataloader), total=len(train_dataloader))
         for step, batch in pbar:
             batch = {k: v.to(args.device) for k, v in batch.items()}
-            label_humour = batch['label_humour']
-            label_sarcasm = batch['label_sarcasm']
-            label_offensive = batch['label_offensive']
-            label_motivational = batch['label_motivational']
-            label_overall_sentiment = batch['label_overall_sentiment']
+            labels = batch["label"]
             yHat = model.forward(**batch)
 
             optimizer.zero_grad()
-
-            losses['loss_humour'] = criterion_humour(yHat[0], label_humour)
-            losses['loss_sarcasm'] = criterion_sarcasm(yHat[1], label_sarcasm)
-            losses['loss_motivational'] = criterion_motivational(yHat[2], label_offensive)
-            losses['loss_offensive'] = criterion_offensive(yHat[3], label_motivational)
-            losses['loss_overall_sentiment'] = criterion_overall_sentiment(yHat[4], label_overall_sentiment)
-
-            loss = sum(l for l in losses.values())
+            loss = criterion(yHat, labels)
             loss.backward()
-
-            # losses.backward()
             optimizer.step()
 
-            running_loss += loss.item() * label_overall_sentiment.shape[0]
-            dataset_size += label_overall_sentiment.shape[0]
 
-            # out = torch.argmax(yHat, axis=1)
-            # accuracy = accuracy_metric(out.cpu(), labels.cpu())
-            # precision = precision_metric(out.cpu(), labels.cpu())
-            # recall = recall_metric(out.cpu(), labels.cpu())
-            # auroc = auroc_metric(F.softmax(yHat, dim=1).cpu(), labels.cpu())
-            # f1 = f1_metrics(out.cpu(), labels.cpu())
+            running_loss += loss.item() * labels.shape[0]
+            dataset_size += labels.shape[0]
+
+            out = torch.argmax(yHat, axis=1)
+            accuracy = accuracy_metric(out.cpu(), labels.cpu())
+            precision = precision_metric(out.cpu(), labels.cpu())
+            recall = recall_metric(out.cpu(), labels.cpu())
+            auroc = auroc_metric(F.softmax(yHat, dim=1).cpu(), labels.cpu())
+            f1 = f1_metrics(out.cpu(), labels.cpu())
             current_lr = optimizer.param_groups[0]["lr"]
 
             pbar.set_postfix(loss=f"{loss.item():.5f}", current_lr=f"{current_lr:.5f}")
@@ -252,14 +225,16 @@ if __name__ == "__main__":
                 "train_loss": epoch_loss,
                 "valid_loss": valid_loss,
                 "valid_accuracy": np.mean(valid_scores["accuracy"]),
-                # "valid_precision": np.mean(valid_scores["precision"]),
-                # "valid_recall": np.mean(valid_scores["recall"]),
-                # "valid_auroc": np.mean(valid_scores["auroc"]),
-                # "valid_f1": np.mean(valid_scores["f1"]),
+                "valid_precision": np.mean(valid_scores["precision"]),
+                "valid_recall": np.mean(valid_scores["recall"]),
+                "valid_auroc": np.mean(valid_scores["auroc"]),
+                "valid_f1": np.mean(valid_scores["f1"]),
                 "lr": optimizer.param_groups[0]["lr"],
             },
             step=epoch,
         )
+
+
 
         print(
             f'Valid Accuracy: {np.mean(valid_scores["accuracy"]):.5f} | Valid Loss: {valid_loss:.5f}'

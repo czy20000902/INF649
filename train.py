@@ -79,11 +79,7 @@ def validate(
     running_loss = 0
     losses = {}
 
-    criterion_humour = nn.CrossEntropyLoss()
-    criterion_sarcasm = nn.CrossEntropyLoss()
-    criterion_offensive = nn.CrossEntropyLoss()
-    criterion_motivational = nn.CrossEntropyLoss()
-    criterion_overall_sentiment = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss()
 
     accuracy_metric_humour = Accuracy(task="multiclass", num_classes=4)
     accuracy_metric_sarcasm = Accuracy(task="multiclass", num_classes=4)
@@ -103,11 +99,11 @@ def validate(
         label_overall_sentiment = batch['label_overall_sentiment']
         yHat = model.forward(**batch)
 
-        losses['loss_humour'] = criterion_humour(yHat[0], label_humour)
-        losses['loss_sarcasm'] = criterion_sarcasm(yHat[1], label_sarcasm)
-        losses['loss_motivational'] = criterion_motivational(yHat[2], label_offensive)
-        losses['loss_offensive'] = criterion_offensive(yHat[3], label_motivational)
-        losses['loss_overall_sentiment'] = criterion_overall_sentiment(yHat[4], label_overall_sentiment)
+        losses['loss_humour'] = criterion(yHat[0], label_humour)
+        losses['loss_sarcasm'] = criterion(yHat[1], label_sarcasm)
+        losses['loss_motivational'] = criterion(yHat[2], label_offensive)
+        losses['loss_offensive'] = criterion(yHat[3], label_motivational)
+        losses['loss_overall_sentiment'] = criterion(yHat[4], label_overall_sentiment)
 
         loss = sum(l for l in losses.values())
         running_loss += loss.item() * label_overall_sentiment.shape[0]
@@ -116,14 +112,11 @@ def validate(
         epoch_loss = running_loss / dataset_size
 
         accuracy = 0
+
         accuracy += accuracy_metric_humour(torch.argmax(yHat[0], axis=1).cpu(), label_humour.cpu())
-        
         accuracy += accuracy_metric_sarcasm(torch.argmax(yHat[1], axis=1).cpu(), label_sarcasm.cpu())
-        
         accuracy += accuracy_metric_motivational(torch.argmax(yHat[2], axis=1).cpu(), label_offensive.cpu())
-        
         accuracy += accuracy_metric_offensive(torch.argmax(yHat[3], axis=1).cpu(), label_motivational.cpu())
-        
         accuracy += accuracy_metric_overall_sentiment(torch.argmax(yHat[4], axis=1).cpu(), label_overall_sentiment.cpu())
         
 
@@ -196,11 +189,7 @@ if __name__ == "__main__":
         running_loss = 0
         losses = {}
 
-        criterion_humour = nn.CrossEntropyLoss()
-        criterion_sarcasm = nn.CrossEntropyLoss()
-        criterion_offensive = nn.CrossEntropyLoss()
-        criterion_motivational = nn.CrossEntropyLoss()
-        criterion_overall_sentiment = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss()
 
         pbar = tqdm(enumerate(train_dataloader), total=len(train_dataloader))
         for step, batch in pbar:
@@ -214,11 +203,11 @@ if __name__ == "__main__":
 
             optimizer.zero_grad()
 
-            losses['loss_humour'] = criterion_humour(yHat[0], label_humour)
-            losses['loss_sarcasm'] = criterion_sarcasm(yHat[1], label_sarcasm)
-            losses['loss_motivational'] = criterion_motivational(yHat[2], label_offensive)
-            losses['loss_offensive'] = criterion_offensive(yHat[3], label_motivational)
-            losses['loss_overall_sentiment'] = criterion_overall_sentiment(yHat[4], label_overall_sentiment)
+            losses['loss_humour'] = criterion(yHat[0], label_humour)
+            losses['loss_sarcasm'] = criterion(yHat[1], label_sarcasm)
+            losses['loss_motivational'] = criterion(yHat[2], label_offensive)
+            losses['loss_offensive'] = criterion(yHat[3], label_motivational)
+            losses['loss_overall_sentiment'] = criterion(yHat[4], label_overall_sentiment)
 
             loss = sum(l for l in losses.values())
             loss.backward()

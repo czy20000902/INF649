@@ -24,6 +24,8 @@ class MemotionModel(nn.Module):
 
         self.image_encoder = MobileOne(width_multipliers=[1, 1, 1, 1]).to(self.device)
         self.text_encoder = CLIPTextModel.from_pretrained("openai/clip-vit-base-patch32").to(self.device)
+
+
         self.alpha_img = torch.randn(size=(1,), requires_grad=True, device=self.device)
         self.alpha_txt = torch.randn(size=(1,), requires_grad=True, device=self.device)
         # self.fc = nn.Linear(768, 512)

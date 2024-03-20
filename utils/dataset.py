@@ -15,10 +15,12 @@ class MemotionDatasetSentiment(Dataset):
         self.split = split
         self.root = root
         self.df = pd.read_csv(os.path.join(root, 'labels.csv'))
-        # if self.split == 'train':
-        #     self.df = self.df.head(int(len(self.df) * 0.9))
-        # else:
-        #     self.df = self.df.tail(int(len(self.df) * 0.1))
+
+        if self.split == 'train':
+            self.df = self.df.head(int(len(self.df) * 0.9))
+        else:
+            self.df = self.df.tail(int(len(self.df) * 0.1))
+
         # self.df = self.df.rename(columns={0: "", 1: "image_name", 3: "text"})
         self.tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
         self.transforms = transform
@@ -66,12 +68,12 @@ class MemotionDataset(Dataset):
         self.split = split
         self.root = root
         self.df = pd.read_csv(os.path.join(root, 'labels.csv'))
-        if self.split != 'train':
-            self.df = self.df.head(int(len(self.df) * 0.1))
-        # if self.split == 'train':
-        #     self.df = self.df.head(int(len(self.df) * 0.9))
-        # else:
-        #     self.df = self.df.tail(int(len(self.df) * 0.1))
+
+        if self.split == 'train':
+            self.df = self.df.head(int(len(self.df) * 0.9))
+        else:
+            self.df = self.df.tail(int(len(self.df) * 0.1))
+
         # self.df = self.df.rename(columns={0: "", 1: "image_name", 3: "text"})
         self.tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
         self.transforms = transform
